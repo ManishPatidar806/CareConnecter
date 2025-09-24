@@ -1,0 +1,31 @@
+{
+  "name": "careconnect",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/ManishPatidar806/CareConnecter#readme",
+  "bugs": {
+    "url": "https://github.com/ManishPatidar806/CareConnecter/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ManishPatidar806/CareConnecter.git"
+  },
+  "license": "MIT",
+  "author": "Manish Patidar",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon src/index.js ",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "mongoose": "^8.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
