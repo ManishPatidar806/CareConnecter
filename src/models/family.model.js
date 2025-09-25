@@ -72,6 +72,9 @@ const familySchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    refreshToken: {
+      type: String,
+    },
     elderInfo: [elderSchema],
   },
   { timestamps: true }

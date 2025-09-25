@@ -4,7 +4,6 @@ configDotenv({
 });
 import dbconnection from "./db/dbconnection.js";
 import app from "./app.js";
-import ApiError from "./utils/ApiError.js";
 const port = process.env.PORT;
 
 await dbconnection()

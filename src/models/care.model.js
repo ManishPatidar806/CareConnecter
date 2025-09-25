@@ -41,6 +41,7 @@ const careSchema = new mongoose.Schema(
       type: String,
       enum: ["VERIFIED", "UN-VERIFIED"],
       required: true,
+      default:"UN-VERIFIED"
     },
     address: {
       type: String,
@@ -50,6 +51,10 @@ const careSchema = new mongoose.Schema(
       type: String,
       enum: ["PENDING", "COMPLETED", "REJECTED"],
       required: true,
+      default:"PENDING"
+    },
+     refreshToken: {
+      type: String,
     },
     availability: [
       {
