@@ -137,10 +137,126 @@ const logout = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, "Logout Successfully "));
 });
 
-const addPost = asyncHandler(async(req,res)=>{
-    const{} = req.body;  
-})
+const getProfile = asyncHandler(async (req, res) => {
+  const family = req.user;
 
+  const profile = await Family.findById(family._id)
+    .select("-passoword -refreshToken")
+    .populate("elderInfo");
 
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Profile retrieved successfully", profile));
+});
 
-export { login, signup, logout };
+const updateProfile = asyncHandler(async (req, res) => {
+  const { name, phoneNo, alternatePhoneNo, address } = req.body;
+  const family = req.user;
+
+  const updateData = {};
+  if (name) updateData.name = name;
+  if (phoneNo) updateData.phoneNo = phoneNo;
+  if (alternatePhoneNo) updateData.alternatePhoneNo = alternatePhoneNo;
+  if (address) updateData.address = address;
+
+  const updatedFamily = await Family.findByIdAndUpdate(family._id, updateData, {
+    new: true,
+    runValidators: true,
+  }).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Profile updated successfully", updatedFamily));
+});
+const addElder = asyncHandler(async (req, res) => {
+  const { name, age, address, phoneNo } = req.body;
+  const family = req.user;
+
+  const elderInfo = {
+    name,
+    age,
+    address,
+    phoneNo,
+    imageUrl: "https://imageUrl", //! imageUrl
+  };
+
+  const updatedFamily = await Family.findByIdAndUpdate(
+    family._id,
+    { $push: { elderInfo: elderInfo } },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(201)
+    .json(
+      new ApiResponse(
+        201,
+        "Elder information added successfully",
+        updatedFamily
+      )
+    );
+});
+
+const updateElder = asyncHandler(async (req, res) => {
+  const { elderId } = req.params;
+  const { name, age, address, phoneNo } = req.body;
+  const family = req.user;
+
+  const updateData = {};
+  if (name) updateData["elderInfo.$.name"] = name;
+  if (age) updateData["elderInfo.$.age"] = age;
+  if (address) updateData["elderInfo.$.address"] = address;
+  if (phoneNo) updateData["elderInfo.$.phoneNo"] = phoneNo;
+
+  const updatedFamily = await Family.findOneAndUpdate(
+    { _id: family._id, "elderInfo._id": elderId },
+    { $set: updateData },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
+
+  if (!updatedFamily) {
+    throw new ApiError(404, "Elder not found");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        "Elder information updated successfully",
+        updatedFamily
+      )
+    );
+});
+// !Here we have to remove image url as well
+const removeElder = asyncHandler(async (req, res) => {
+  const { elderId } = req.params;
+  const family = req.user;
+
+  const updatedFamily = await Family.findByIdAndUpdate(
+    family._id,
+    { $pull: { elderInfo: { _id: elderId } } },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        "Elder information removed successfully",
+        updatedFamily
+      )
+    );
+});
+
+export {
+  login,
+  signup,
+  logout,
+  getProfile,
+  updateProfile,
+  addElder,
+  updateElder,
+  removeElder,
+};

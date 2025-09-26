@@ -22,6 +22,7 @@ const jwtVerify = async (req, res, next) => {
     }
     req.user = user;
     req.role = role;
+    req.id = id;
     next();
   } catch (error) {
     return res.status(401).json(new ApiError(401, "Invalid or expired Token"));

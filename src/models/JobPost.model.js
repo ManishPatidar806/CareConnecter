@@ -46,6 +46,7 @@ const jobPostSchema = new mongoose.Schema(
       type: String,
       enum: ["ACTIVE", "EXPIRE"],
       required: true,
+      default:"ACTIVE"
     },
     skillRequired: {
       type: [{ type: String }],
