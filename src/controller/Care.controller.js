@@ -128,4 +128,189 @@ const logout = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, "Logout Successfully "));
 });
 
-export { login, signup, logout };
+const getProfile = asyncHandler(async (req, res) => {
+  const id = req.user._id;
+
+  const careGiver = await Care.findById(id).select("-refreshToken -password");
+
+  return res
+    .status(200)
+    .status(new ApiResponse(200, "Profile Retrieved Successfully", careGiver));
+});
+
+const updateProfile = asyncHandler(async (req, res) => {
+  const { name, phoneNo, address, skill } = req.body;
+  const careId = req.user._id;
+  let updateData = {};
+  if (name) updateData.name = name;
+  if (phoneNo) updateData.phoneNo = phoneNo;
+  if (address) updateData.address = address;
+  if (skill) updateData.skill = skill;
+
+  const care = await Care.findByIdAndUpdate(careId, updateData, {
+    new: true,
+    runValidators: true,
+  }).select("-password -refreshToken");
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Profile Update Successfully", care));
+});
+
+const addAvailability = asyncHandler(async (req, res) => {
+  const { date, startTime, duration } = req.body;
+  const care = req.user;
+  const availability = {
+    date: new Date(date),
+    startTime: startTime,
+    duration: duration,
+  };
+
+  const updatedCare = await Care.findByIdAndUpdate(
+    care._id,
+    { $push: { availability: availability } },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
+  return res
+    .status(201)
+    .json(new ApiResponse(201, "Availabity Updated Successfully", updatedCare));
+});
+
+const updateAvailability = asyncHandler(async (req, res) => {
+  const { availabilityId } = req.params;
+  const { date, startTime, duration } = req.body;
+  const care = req.user;
+  const updateData = {};
+  if (data) updateData["availability.$.date"] = new Date(date);
+  if (startTime) updateData["availability.$.startTime"] = startTime;
+  if (duration) updateData["availability.$.duration"] = duration;
+  const updatedCare = await Care.findOneAndUpdate(
+    { _id: care._id, "availability._id": availabilityId },
+    { $set: updateData },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
+  if (!updatedCare) {
+    throw new ApiError(404, "Availability slot not found");
+  }
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, "Availability updated successfully", updatedCare)
+    );
+});
+
+const removeAvailability = asyncHandler(async (req, res) => {
+  const { availabilityId } = req.params;
+  const care = req.user;
+  const updatedCare = await Care.findOneAndUpdate(
+    care._id,
+    {
+      $pull: {
+        availability: {
+          _id: availabilityId,
+        },
+      },
+    },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, "Availability removed successfully", updatedCare)
+    );
+});
+
+/**
+ *
+ * here the logic is incomplete to upload the docs and remove the docs form cloud
+ *
+ *
+ */
+
+const addDocument = asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  const caregiver = req.user;
+
+  if (!req.file) {
+    throw new ApiError(400, "Document file is required");
+  }
+
+  const document = {
+    name,
+    documentUrl: req.file.path || "https://via.placeholder.com/150", // path of file updated
+  };
+
+  const updatedCaregiver = await Care.findByIdAndUpdate(
+    caregiver._id,
+    { $push: { document: document } },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(201)
+    .json(
+      new ApiResponse(201, "Document added successfully", updatedCaregiver)
+    );
+});
+
+// Remove document
+const removeDocument = asyncHandler(async (req, res) => {
+  const { documentId } = req.params;
+  const caregiver = req.user;
+  // here we need to write a logic to remove doc form cloud
+  const updatedCaregiver = await Care.findByIdAndUpdate(
+    caregiver._id,
+    { $pull: { document: { _id: documentId } } },
+    { new: true }
+  ).select("-password -refreshToken");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, "Document removed successfully", updatedCaregiver)
+    );
+});
+
+// Get all caregivers (for families to browse)
+const getAllCaregivers = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, skills, verifiedStatus } = req.query;
+
+  const filter = {};
+  if (skills) {
+    filter.skills = { $in: skills.split(",") };
+  }
+  if (verifiedStatus) {
+    filter.verifiedStatus = verifiedStatus;
+  }
+
+  const caregivers = await Care.find(filter)
+    .select("-password -refreshToken -document")
+    .limit(limit * 1)
+    .skip((page - 1) * limit)
+    .sort({ createdAt: -1 });
+
+  const total = await Care.countDocuments(filter);
+
+  return res.status(200).json(
+    new ApiResponse(200, "Caregivers retrieved successfully", {
+      caregivers,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      total,
+    })
+  );
+});
+
+export {
+  login,
+  signup,
+  logout,
+  getProfile,
+  updateProfile,
+  addAvailability,
+  updateAvailability,
+  removeAvailability,
+  addDocument,
+  removeDocument,
+  getAllCaregivers,
+};
