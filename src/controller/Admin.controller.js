@@ -1,9 +1,9 @@
 import { Admin } from "../models/admin.model.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/AsyncHandler.js";
-import Family from "../models/family.model.js";
-import Care from "../models/care.model.js";
-import AuditLog from "../models/auditLog.model.js";
+import { Family } from "../models/family.model.js";
+import { Care } from "../models/care.model.js";
+import { AuditLog } from "../models/auditLog.model.js";
 import {
   accessTokenGenerator,
   refreshTokenGenerator,

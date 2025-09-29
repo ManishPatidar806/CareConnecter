@@ -1,6 +1,5 @@
 import mongoose from "mongoose";
 import { DB_NAME } from "../constraints.js";
-import ApiError from "../utils/ApiError.js";
 
 const dbconnection = async () => {
   try {
