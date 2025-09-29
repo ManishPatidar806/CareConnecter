@@ -39,6 +39,6 @@ const notificationSchema = new mongoose.Schema(
 );
 
 notificationSchema.index({ familyId: 1, isRead: 1 });
-notificationSchema.index({ caregiverId: 1, isRead: 1 });
+notificationSchema.index({ careId: 1, isRead: 1 });
 
 export const Notification = mongoose.model("Notification", notificationSchema);

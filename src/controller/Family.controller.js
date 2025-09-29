@@ -1,10 +1,12 @@
 import { Family } from "../models/family.model.js";
 import ApiError from "../utils/ApiError.js";
+import ApiResponse from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/AsyncHandler.js";
 import {
   accessTokenGenerator,
   refreshTokenGenerator,
 } from "../utils/JwtGenerator.js";
+import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 
 const signup = asyncHandler(async (req, res) => {
   const {
@@ -172,29 +174,41 @@ const addElder = asyncHandler(async (req, res) => {
   const { name, age, address, phoneNo } = req.body;
   const family = req.user;
 
-  const elderInfo = {
-    name,
-    age,
-    address,
-    phoneNo,
-    imageUrl: "https://imageUrl", //! imageUrl
-  };
+  let imageUrl = "https://via.placeholder.com/150"; // Default placeholder
 
-  const updatedFamily = await Family.findByIdAndUpdate(
-    family._id,
-    { $push: { elderInfo: elderInfo } },
-    { new: true, runValidators: true }
-  ).select("-password -refreshToken");
+  try {
+    // Upload image to Cloudinary if provided
+    if (req.file) {
+      const cloudinaryResult = await uploadToCloudinary(req.file.path, 'careconnect/elders');
+      imageUrl = cloudinaryResult.secure_url;
+    }
 
-  return res
-    .status(201)
-    .json(
-      new ApiResponse(
-        201,
-        "Elder information added successfully",
-        updatedFamily
-      )
-    );
+    const elderInfo = {
+      name,
+      age,
+      address,
+      phoneNo,
+      imageUrl: imageUrl,
+    };
+
+    const updatedFamily = await Family.findByIdAndUpdate(
+      family._id,
+      { $push: { elderInfo: elderInfo } },
+      { new: true, runValidators: true }
+    ).select("-password -refreshToken");
+
+    return res
+      .status(201)
+      .json(
+        new ApiResponse(
+          201,
+          "Elder information added successfully",
+          updatedFamily
+        )
+      );
+  } catch (error) {
+    throw new ApiError(500, "Failed to add elder information: " + error.message);
+  }
 });
 
 const updateElder = asyncHandler(async (req, res) => {

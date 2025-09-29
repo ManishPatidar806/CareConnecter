@@ -1,10 +1,12 @@
 import { Care } from "../models/care.model.js";
 import ApiError from "../utils/ApiError.js";
+import ApiResponse from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/AsyncHandler.js";
 import {
   accessTokenGenerator,
   refreshTokenGenerator,
 } from "../utils/JwtGenerator.js";
+import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 
 const signup = asyncHandler(async (req, res) => {
   const { name, email, username, password, phoneNo, address } = req.body;
@@ -235,40 +237,63 @@ const addDocument = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Document file is required");
   }
 
-  const document = {
-    name,
-    documentUrl: req.file.path || "https://via.placeholder.com/150", // path of file updated
-  };
+  try {
+    // Upload to Cloudinary
+    const cloudinaryResult = await uploadToCloudinary(req.file.path, 'careconnect/documents');
+    
+    const document = {
+      name,
+      documentUrl: cloudinaryResult.secure_url,
+      publicId: cloudinaryResult.public_id
+    };
 
-  const updatedCaregiver = await Care.findByIdAndUpdate(
-    caregiver._id,
-    { $push: { document: document } },
-    { new: true, runValidators: true }
-  ).select("-password -refreshToken");
+    const updatedCaregiver = await Care.findByIdAndUpdate(
+      caregiver._id,
+      { $push: { document: document } },
+      { new: true, runValidators: true }
+    ).select("-password -refreshToken");
 
-  return res
-    .status(201)
-    .json(
-      new ApiResponse(201, "Document added successfully", updatedCaregiver)
-    );
+    return res
+      .status(201)
+      .json(
+        new ApiResponse(201, "Document added successfully", updatedCaregiver)
+      );
+  } catch (error) {
+    throw new ApiError(500, "Failed to upload document: " + error.message);
+  }
 });
 
 // Remove document
 const removeDocument = asyncHandler(async (req, res) => {
   const { documentId } = req.params;
   const caregiver = req.user;
-  // here we need to write a logic to remove doc form cloud
-  const updatedCaregiver = await Care.findByIdAndUpdate(
-    caregiver._id,
-    { $pull: { document: { _id: documentId } } },
-    { new: true }
-  ).select("-password -refreshToken");
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, "Document removed successfully", updatedCaregiver)
-    );
+  // Find the document to get its publicId before removal
+  const document = caregiver.document.find(doc => doc._id.toString() === documentId);
+  if (!document) {
+    throw new ApiError(404, "Document not found");
+  }
+
+  try {
+    // Delete from Cloudinary if publicId exists
+    if (document.publicId) {
+      await deleteFromCloudinary(document.publicId);
+    }
+
+    const updatedCaregiver = await Care.findByIdAndUpdate(
+      caregiver._id,
+      { $pull: { document: { _id: documentId } } },
+      { new: true }
+    ).select("-password -refreshToken");
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, "Document removed successfully", updatedCaregiver)
+      );
+  } catch (error) {
+    throw new ApiError(500, "Failed to remove document: " + error.message);
+  }
 });
 
 // Get all caregivers (for families to browse)
