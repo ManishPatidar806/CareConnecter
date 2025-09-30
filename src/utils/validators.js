@@ -46,7 +46,7 @@ export const usernameValidation = body('username')
   .matches(/^[a-zA-Z0-9_]+$/)
   .withMessage('Username can only contain letters, numbers, and underscores');
 
-// Family specific validations
+
 export const familySignupValidation = [
   nameValidation,
   emailValidation,

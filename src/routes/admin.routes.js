@@ -10,12 +10,16 @@ import {
   getDashboardStats,
 } from "../controller/Admin.controller.js";
 import jwtVerify from "../middlewares/jwtVerify.middleware.js";
+import validate, { 
+  adminSignupValidation, 
+  loginValidation 
+} from "../utils/validators.js";
 
 const adminRouter = Router();
 
 // Public Routes
-adminRouter.route("/login").post(login);
-adminRouter.route("/signup").post(signup);
+adminRouter.route("/login").post(validate(loginValidation), login);
+adminRouter.route("/signup").post(validate(adminSignupValidation), signup);
 
 // Protected Routes
 adminRouter.route("/logout").get(jwtVerify, logout);

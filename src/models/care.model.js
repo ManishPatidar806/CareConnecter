@@ -28,14 +28,17 @@ const careSchema = new mongoose.Schema(
     phoneNo: {
       type: String,
       required: true,
-       validator: function (v) {
-        return /^\d{10}$/.test(v);
+      validate: {
+        validator: function (v) {
+          return /^\d{10}$/.test(v);
+        },
+        message: 'Phone number must be exactly 10 digits'
       },
     },
     imageUrl: {
       type: String,
-      required: true,
-      unique: true,
+      required: false,
+      default: "https://via.placeholder.com/150"
     },
     verifiedStatus: {
       type: String,

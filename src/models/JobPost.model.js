@@ -33,10 +33,13 @@ const jobPostSchema = new mongoose.Schema(
     durationHours: {
       type: Number,
       required: true,
+      min: [0.5, 'Duration must be at least 0.5 hours'],
+      max: [24, 'Duration cannot exceed 24 hours']
     },
     salary: {
       type: Number,
       required: true,
+      min: [0, 'Salary must be positive']
     },
     location: {
       type: String,

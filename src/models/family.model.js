@@ -51,8 +51,11 @@ const familySchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      validator: function (v) {
-        return /^\d{10}$/.test(v);
+      validate: {
+        validator: function (v) {
+          return /^\d{10}$/.test(v);
+        },
+        message: 'Phone number must be exactly 10 digits'
       },
     },
     alternatePhoneNo: {
@@ -60,13 +63,17 @@ const familySchema = new mongoose.Schema(
       default: function () {
         return this.phoneNo;
       },
-      validator: function (v) {
-        return /^\d{10}$/.test(v);
+      validate: {
+        validator: function (v) {
+          return /^\d{10}$/.test(v);
+        },
+        message: 'Alternate phone number must be exactly 10 digits'
       },
     },
     imageUrl: {
       type: String,
-      required: true,
+      required: false,
+      default: "https://via.placeholder.com/150"
     },
     address: {
       type: String,
