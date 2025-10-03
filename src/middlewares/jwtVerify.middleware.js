@@ -13,11 +13,11 @@ const jwtVerify = async (req, res, next) => {
         .json(new ApiResponse(401, "Access token not found"));
     }
     const decode = jwt.verify(accesstoken, process.env.ACCESS_TOKEN_SECRET);
-    const { _id, name, role } = decode;
+    const { _id, role } = decode;
     let user;
-    if (role == "admin") user = await Admin.findById(_id);
-    if (role == "care") user = await Care.findById(_id);
-    if (role == "family") user = await Family.findById(_id);
+    if (role === "admin") user = await Admin.findById(_id).select('-refreshToken -password');
+    if (role === "care") user = await Care.findById(_id).select('-refreshToken -password');
+    if (role === "family") user = await Family.findById(_id).select('-refreshToken -password');
     if (!user) {
       return res.status(401).json(new ApiError(401, "Invalid User"));
     }

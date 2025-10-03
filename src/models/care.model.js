@@ -91,6 +91,36 @@ const careSchema = new mongoose.Schema(
         },
       },
     ],
+    // Stripe Connect account information
+    stripeConnectAccount: {
+      accountId: {
+        type: String, // Stripe Connect account ID
+      },
+      accountStatus: {
+        type: String,
+        enum: ["NOT_CREATED", "PENDING", "ACTIVE", "REJECTED", "RESTRICTED"],
+        default: "NOT_CREATED",
+      },
+      onboardingComplete: {
+        type: Boolean,
+        default: false,
+      },
+      detailsSubmitted: {
+        type: Boolean,
+        default: false,
+      },
+      chargesEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      payoutsEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      lastUpdated: {
+        type: Date,
+      },
+    },
   },
   { timestamps: true }
 );

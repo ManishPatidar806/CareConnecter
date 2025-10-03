@@ -2,11 +2,8 @@ import { Family } from "../models/family.model.js";
 import ApiError from "../utils/ApiError.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/AsyncHandler.js";
-import {
-  accessTokenGenerator,
-  refreshTokenGenerator,
-} from "../utils/JwtGenerator.js";
-import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
+import { issueAuthTokens, rotateRefreshToken } from "../utils/authTokens.js";
+import { uploadToCloudinary } from "../utils/cloudinary.js";
 
 const signup = asyncHandler(async (req, res) => {
   const {
@@ -18,12 +15,19 @@ const signup = asyncHandler(async (req, res) => {
     alternatePhoneNo,
     address,
   } = req.body;
+  
+  // Check required fields only
   if (
-    [name, email, username, password, phoneNo, alternatePhoneNo, address].some(
-      (field) => field.trim() === ""
+    [name, email, username, password, phoneNo, address].some(
+      (field) => field?.trim() === ""
     )
   ) {
-    throw new ApiError(400, "All fields must be required");
+    throw new ApiError(400, "All required fields must be provided");
+  }
+  
+  // Validate alternatePhoneNo separately if provided
+  if (alternatePhoneNo && alternatePhoneNo.trim() === "") {
+    throw new ApiError(400, "Alternate phone number cannot be empty if provided");
   }
 
   const existedEmail = await Family.findOne({ email });
@@ -49,32 +53,12 @@ const signup = asyncHandler(async (req, res) => {
   if (!createdUser) {
     throw new ApiError(500, "Internal Server error");
   }
-  const accessToken = accessTokenGenerator(family._id, "family", family.name);
-  const refreshToken = refreshTokenGenerator(family._id, "family", family.name);
-  family.refreshToken = refreshToken;
-  await family.save();
-  res
-    .cookie("accesstoken", accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
-    .cookie("refreshtoken", refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, "Family  Register Successfully", createdUser));
+  return issueAuthTokens({ user: family, role: 'family', res, message: 'Family register successfully' });
 });
 
 const login = asyncHandler(async (req, res) => {
   const { email, password, role } = req.body;
-  if ([email, password, role].some((field) => field.trim() === "")) {
+  if ([email, password, role].some((field) => field?.trim() === "")) {
     throw new ApiError(400, "All field must be in valid format");
   }
   if (!["family"].includes(role)) {
@@ -89,26 +73,7 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Incorrect Password");
   }
 
-  const accessToken = accessTokenGenerator(family._id, "family", family.name);
-  const refreshToken = refreshTokenGenerator(family._id, "family", family.name);
-  family.refreshToken = refreshToken;
-  await family.save();
-
-  res
-    .cookie("accesstoken", accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
-    .cookie("refreshtoken", refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-
-  return res.status(200).json(new ApiResponse(200, "Login Successfully"));
+  return issueAuthTokens({ user: family, role: 'family', res, message: 'Login successfully' });
 });
 const logout = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshtoken;
@@ -143,7 +108,7 @@ const getProfile = asyncHandler(async (req, res) => {
   const family = req.user;
 
   const profile = await Family.findById(family._id)
-    .select("-passoword -refreshToken")
+    .select("-password -refreshToken")
     .populate("elderInfo");
 
   return res
@@ -274,3 +239,12 @@ export {
   updateElder,
   removeElder,
 };
+
+// Refresh token endpoint handler (export separately to reduce breaking existing exports usage)
+export const refreshSession = asyncHandler(async (req, res) => {
+  const token = req.cookies?.refreshtoken;
+  if (!token) throw new ApiError(401, 'Refresh token missing');
+  const rotated = await rotateRefreshToken({ model: Family, token, res });
+  if (!rotated) throw new ApiError(401, 'Invalid refresh token');
+  return res.status(200).json(new ApiResponse(200, 'Session refreshed', rotated));
+});

@@ -2,17 +2,14 @@ import { Care } from "../models/care.model.js";
 import ApiError from "../utils/ApiError.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/AsyncHandler.js";
-import {
-  accessTokenGenerator,
-  refreshTokenGenerator,
-} from "../utils/JwtGenerator.js";
+import { issueAuthTokens, rotateRefreshToken } from "../utils/authTokens.js";
 import { uploadToCloudinary, deleteFromCloudinary } from "../utils/cloudinary.js";
 
 const signup = asyncHandler(async (req, res) => {
   const { name, email, username, password, phoneNo, address } = req.body;
   if (
     [name, email, username, password, phoneNo, address].some(
-      (field) => field.trim() === ""
+      (field) => field?.trim() === ""
     )
   ) {
     throw new ApiError(400, "All fields must be required");
@@ -40,32 +37,12 @@ const signup = asyncHandler(async (req, res) => {
   if (!createdUser) {
     throw new ApiError(500, "Internal Server error");
   }
-  const accessToken = accessTokenGenerator(care._id, "care", care.name);
-  const refreshToken = refreshTokenGenerator(care._id, "care", care.name);
-  care.refreshToken = refreshToken;
-  await care.save();
-  res
-    .cookie("accesstoken", accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
-    .cookie("refreshtoken", refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, "Care  Register Successfully", createdUser));
+  return issueAuthTokens({ user: care, role: 'care', res, message: 'Care register successfully' });
 });
 
 const login = asyncHandler(async (req, res) => {
   const { email, password, role } = req.body;
-  if ([email, password, role].some((field) => field.trim() === "")) {
+  if ([email, password, role].some((field) => field?.trim() === "")) {
     throw new ApiError(400, "All field must be in valid format");
   }
   if (!["care"].includes(role)) {
@@ -80,26 +57,7 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Incorrect Password");
   }
 
-  const accessToken = accessTokenGenerator(care._id, "care", care.name);
-  const refreshToken = refreshTokenGenerator(care._id, "care", care.name);
-  care.refreshToken = refreshToken;
-  await care.save();
-
-  res
-    .cookie("accesstoken", accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
-    .cookie("refreshtoken", refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-
-  return res.status(200).json(new ApiResponse(200, "Login Successfully"));
+  return issueAuthTokens({ user: care, role: 'care', res, message: 'Login successfully' });
 });
 const logout = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshtoken;
@@ -137,17 +95,17 @@ const getProfile = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .status(new ApiResponse(200, "Profile Retrieved Successfully", careGiver));
+    .json(new ApiResponse(200, "Profile Retrieved Successfully", careGiver));
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const { name, phoneNo, address, skill } = req.body;
+  const { name, phoneNo, address, skills } = req.body;
   const careId = req.user._id;
   let updateData = {};
   if (name) updateData.name = name;
   if (phoneNo) updateData.phoneNo = phoneNo;
   if (address) updateData.address = address;
-  if (skill) updateData.skill = skill;
+  if (skills) updateData.skills = Array.isArray(skills) ? skills : [skills];
 
   const care = await Care.findByIdAndUpdate(careId, updateData, {
     new: true,
@@ -182,7 +140,7 @@ const updateAvailability = asyncHandler(async (req, res) => {
   const { date, startTime, duration } = req.body;
   const care = req.user;
   const updateData = {};
-  if (data) updateData["availability.$.date"] = new Date(date);
+  if (date) updateData["availability.$.date"] = new Date(date);
   if (startTime) updateData["availability.$.startTime"] = startTime;
   if (duration) updateData["availability.$.duration"] = duration;
   const updatedCare = await Care.findOneAndUpdate(
@@ -204,14 +162,8 @@ const removeAvailability = asyncHandler(async (req, res) => {
   const { availabilityId } = req.params;
   const care = req.user;
   const updatedCare = await Care.findOneAndUpdate(
-    care._id,
-    {
-      $pull: {
-        availability: {
-          _id: availabilityId,
-        },
-      },
-    },
+    { _id: care._id },
+    { $pull: { availability: { _id: availabilityId } } },
     { new: true }
   ).select("-password -refreshToken");
 
@@ -339,3 +291,11 @@ export {
   removeDocument,
   getAllCaregivers,
 };
+
+export const refreshCareSession = asyncHandler(async (req, res) => {
+  const token = req.cookies?.refreshtoken;
+  if (!token) throw new ApiError(401, 'Refresh token missing');
+  const rotated = await rotateRefreshToken({ model: Care, token, res });
+  if (!rotated) throw new ApiError(401, 'Invalid refresh token');
+  return res.status(200).json(new ApiResponse(200, 'Session refreshed', rotated));
+});

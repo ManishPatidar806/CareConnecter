@@ -13,7 +13,7 @@ const paymentSchema = new mongoose.Schema(
     },
     paymentStatus: {
       type: String,
-      enum: ["PENDING", "COMPLETED", "REJECTED"],
+      enum: ["PENDING", "COMPLETED", "REJECTED", "TRANSFERRED"],
     },
     familyId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -29,6 +29,25 @@ const paymentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "JobPost",
       required: true,
+    },
+    // Stripe Connect specific fields
+    stripeConnectAccountId: {
+      type: String, // Caregiver's Stripe Connect account ID
+    },
+    transferId: {
+      type: String, // Stripe transfer ID for direct payment
+    },
+    transferStatus: {
+      type: String,
+      enum: ["PENDING", "PAID", "FAILED", "CANCELED"],
+      default: "PENDING",
+    },
+    platformFee: {
+      type: Number,
+      default: 0, // Fee kept by the platform (optional)
+    },
+    netAmount: {
+      type: Number, // Amount transferred to caregiver after platform fee
     },
   },
   { timestamps: true }

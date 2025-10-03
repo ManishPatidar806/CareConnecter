@@ -21,6 +21,14 @@ const familyRouter = Router();
 // Public Routes
 familyRouter.route("/login").post(validate(loginValidation), login);
 familyRouter.route("/signup").post(validate(familySignupValidation), signup);
+// Deprecated: use /api/v1/auth/refresh
+familyRouter.route("/refresh").get((req,res)=>{
+  return res.status(410).json({
+    statusCode:410,
+    message:"Deprecated. Use /api/v1/auth/refresh",
+    success:false
+  });
+});
 
 // Protected Routes
 familyRouter.route("/logout").get(jwtVerify, logout);

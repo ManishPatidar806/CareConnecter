@@ -1,36 +1,38 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import {
   createPaymentIntent,
   confirmPayment,
   getFamilyPayments,
   getCaregiverPayments,
   getPaymentDetails,
-  getPaymentStats
+  getPaymentStats,
 } from "../controller/Payment.controller.js";
 import jwtVerify from "../middlewares/jwtVerify.middleware.js";
 import { validate } from "../utils/validators.js";
 import { body } from "express-validator";
-import express from "express";
 
 const paymentRouter = Router();
 
 // Webhook endpoint (must be before other middlewares)
-paymentRouter.route("/webhook").post(
-  express.raw({ type: 'application/json' }), 
-  confirmPayment
-);
+paymentRouter
+  .route("/webhook")
+  .post(express.raw({ type: "application/json" }), confirmPayment);
 
 // Protected routes - require authentication
 paymentRouter.use(jwtVerify);
 
 // Create payment intent
-paymentRouter.route("/create-intent").post(
-  validate([
-    body('jobId').isMongoId().withMessage('Valid job ID is required'),
-    body('caregiverId').isMongoId().withMessage('Valid caregiver ID is required')
-  ]),
-  createPaymentIntent
-);
+paymentRouter
+  .route("/create-intent")
+  .post(
+    validate([
+      body("jobId").isMongoId().withMessage("Valid job ID is required"),
+      body("caregiverId")
+        .isMongoId()
+        .withMessage("Valid caregiver ID is required"),
+    ]),
+    createPaymentIntent
+  );
 
 // Get payment history
 paymentRouter.route("/family/history").get(getFamilyPayments);

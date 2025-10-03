@@ -4,16 +4,15 @@ import asyncHandler from "../utils/AsyncHandler.js";
 import { Family } from "../models/family.model.js";
 import { Care } from "../models/care.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
-import {
-  accessTokenGenerator,
-  refreshTokenGenerator,
-} from "../utils/JwtGenerator.js";
+import { JobPost } from "../models/JobPost.model.js";
+import ApiResponse from "../utils/ApiResponse.js";
+import { issueAuthTokens, rotateRefreshToken } from "../utils/authTokens.js";
 
 const signup = asyncHandler(async (req, res) => {
-  const { name, email, password, phoneNo } = req.body;
+  const { name, email, password, phoneNo, address } = req.body;
   if (
     [name, email, password, phoneNo, address].some(
-      (field) => field.trim() === ""
+      (field) => field?.trim() === ""
     )
   ) {
     throw new ApiError(400, "All fields must be required");
@@ -37,32 +36,12 @@ const signup = asyncHandler(async (req, res) => {
   if (!createdUser) {
     throw new ApiError(500, "Internal Server error");
   }
-  const accessToken = accessTokenGenerator(admin._id, "admin", admin.name);
-  const refreshToken = refreshTokenGenerator(admin._id, "admin", admin.name);
-  admin.refreshToken = refreshToken;
-  await admin.save();
-  res
-    .cookie("accesstoken", accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
-    .cookie("refreshtoken", refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, "Admin  Register Successfully", createdUser));
+  return issueAuthTokens({ user: admin, role: 'admin', res, message: 'Admin register successfully' });
 });
 
 const login = asyncHandler(async (req, res) => {
   const { email, password, role } = req.body;
-  if ([email, password, role].some((field) => field.trim() === "")) {
+  if ([email, password, role].some((field) => field?.trim() === "")) {
     throw new ApiError(400, "All field must be in valid format");
   }
   if (!["admin"].includes(role)) {
@@ -77,26 +56,7 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Incorrect Password");
   }
 
-  const accessToken = accessTokenGenerator(admin._id, "admin", admin.name);
-  const refreshToken = refreshTokenGenerator(admin._id, "admin", admin.name);
-  admin.refreshToken = refreshToken;
-  await admin.save();
-
-  res
-    .cookie("accesstoken", accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
-    .cookie("refreshtoken", refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
-
-  return res.status(200).json(new ApiResponse(200, "Login Successfully"));
+  return issueAuthTokens({ user: admin, role: 'admin', res, message: 'Login successfully' });
 });
 const logout = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshtoken;
@@ -205,7 +165,7 @@ const getPendingCareGiver = asyncHandler(async (req, res) => {
 });
 
 const approveCareGiver = asyncHandler(async (req, res) => {
-  const { careId } = req.param;
+  const { caregiverId } = req.params;
   const { backgroundCheckStatus, verifiedStatus } = req.body;
   const role = req.role;
   if (role !== "admin") {
@@ -216,7 +176,7 @@ const approveCareGiver = asyncHandler(async (req, res) => {
     updateData.backgroundCheckStatus = backgroundCheckStatus;
   if (verifiedStatus) updateData.verifiedStatus = verifiedStatus;
 
-  const approveCare = await Care.findByIdAndUpdate(careId, updateData, {
+  const approveCare = await Care.findByIdAndUpdate(caregiverId, updateData, {
     new: true,
     runValidators: true,
   }).select("-password -refreshToken");
@@ -232,7 +192,7 @@ const approveCareGiver = asyncHandler(async (req, res) => {
         : ""
     }${verifiedStatus ? "verification " + verifiedStatus.toLowerCase() : ""}`,
     targetTable: "Care",
-    targetId: careId,
+  targetId: caregiverId,
   });
   await auditLog.save();
   return res
@@ -243,7 +203,7 @@ const approveCareGiver = asyncHandler(async (req, res) => {
 });
 
 const getAuditLog = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, actorTable, targetTable } = req.param;
+  const { page = 1, limit = 20, actorTable, targetTable } = req.query;
   const filter = {};
 
   if (actorTable) filter.actorTable = actorTable;
@@ -282,21 +242,17 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     JobPost.countDocuments({ status: "ACTIVE" }),
   ]);
 
-  const stats = {
-    totalFamilies,
-    totalCaregivers,
-    pendingCaregivers,
-    verifiedCaregivers,
-    totalJobPosts,
-    activeJobPosts,
-    totalUsers: totalFamilies + totalCaregivers,
-  };
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, "Dashboard statistics retrieved successfully", stats)
-    );
+  return res.status(200).json(
+    new ApiResponse(200, "Dashboard statistics retrieved successfully", {
+      totalFamilies,
+      totalCaregivers,
+      pendingCaregivers,
+      verifiedCaregivers,
+      totalJobPosts,
+      activeJobPosts,
+      totalUsers: totalFamilies + totalCaregivers,
+    })
+  );
 });
 
 export {
@@ -309,3 +265,11 @@ export {
   getAuditLog,
   getDashboardStats,
 };
+
+export const refreshAdminSession = asyncHandler(async (req, res) => {
+  const token = req.cookies?.refreshtoken;
+  if (!token) throw new ApiError(401, 'Refresh token missing');
+  const rotated = await rotateRefreshToken({ model: Admin, token, res });
+  if (!rotated) throw new ApiError(401, 'Invalid refresh token');
+  return res.status(200).json(new ApiResponse(200, 'Session refreshed', rotated));
+});

@@ -25,6 +25,14 @@ const careRouter = Router();
 // Public Routes
 careRouter.route("/login").post(validate(loginValidation), login);
 careRouter.route("/signup").post(upload.single("profileImage"), validate(caregiverSignupValidation), signup);
+// Deprecated: use /api/v1/auth/refresh
+careRouter.route("/refresh").get((req,res)=>{
+  return res.status(410).json({
+    statusCode:410,
+    message:"Deprecated. Use /api/v1/auth/refresh",
+    success:false
+  });
+});
 careRouter.route("/all").get(getAllCaregivers);
 
 // Protected routes

@@ -4,10 +4,11 @@ import ApiResponse from "../utils/ApiResponse.js";
 import { JobPost } from "../models/JobPost.model.js";
 import { AuditLog } from "../models/auditLog.model.js";
 import { Care } from "../models/care.model.js";
+import {createAndSendNotification} from "../utils/socket.js";
 
 const createJobPost = asyncHandler(async (req, res) => {
-  if (req.role != "family") {
-    throw new ApiError(403, "Only Familes Can create Job Post");
+  if (req.role !== "family") {
+    throw new ApiError(403, "Only Families Can create Job Post");
   }
   const {
     elderName,
@@ -56,7 +57,13 @@ const createJobPost = asyncHandler(async (req, res) => {
   }).select("_id");
 
   for (const caregiver of matchingCaregivers) {
-    // here we write logic of send notification
+    await createAndSendNotification({
+      type: 'NEW_JOB_POST',
+      message: `New job post available for ${elderName} in ${location}`,
+      caregiverId: caregiver._id,
+      jobPostId: createJob._id,
+      recipientType: 'caregiver',
+    });
   }
 
   return res
@@ -89,13 +96,12 @@ const getAllJobPosts = asyncHandler(async (req, res) => {
   const jobPosts = await JobPost.find(filter)
     .populate("familyId", "name email phoneNo address")
     .populate("applications.careId", "name email phoneNo skills verifiedStatus")
-    .polygon()
     .limit(limit * 1)
     .skip((page - 1) * limit)
     .sort({ createdAt: -1 });
   const total = await JobPost.countDocuments(filter);
   return res.status(200).json(
-    new ApiResponse(200, "Job post Reterived Successfully", {
+    new ApiResponse(200, "Job post Retrieved Successfully", {
       jobPosts,
       totalPages: Math.ceil(total / limit),
       currentPage: page,
@@ -134,7 +140,7 @@ const getFamilyJobPosts = asyncHandler(async (req, res) => {
   );
 });
 
-// care giver apply for job
+// caregiver apply for job
 const applyForJob = asyncHandler(async (req, res) => {
   const { jobId } = req.params;
   const caregiver = req.user;
@@ -295,6 +301,28 @@ const deleteJobPost = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, "Job post deleted successfully"));
 });
 
+// RESTful: get single job by id (accessible to authenticated users; families see their jobs, caregivers see active jobs they've applied or could apply to, admin sees all)
+const getJobById = asyncHandler(async (req, res) => {
+  const { jobId } = req.params;
+  const role = req.role;
+  const user = req.user;
+  let filter = { _id: jobId };
+  if (role === "family") filter.familyId = user._id;
+  if (role === "care") filter.status = { $in: ["ACTIVE", "EXPIRE", "ACTIVE"] }; // allow viewing active/expired
+  const job = await JobPost.findOne(filter)
+    .populate("familyId", "name email phoneNo address")
+    .populate("applications.careId", "name email skills verifiedStatus");
+  if (!job) throw new ApiError(404, "Job not found or access denied");
+  return res
+    .status(200)
+    .json(new ApiResponse(200, "Job retrieved successfully", job));
+});
+
+// RESTful: delete job (family owner only) using same logic; wrapper calling existing implementation logic
+const deleteJob = asyncHandler(async (req, res) => {
+  return deleteJobPost(req, res);
+});
+
 // Get matching caregivers for a job post
 const getMatchingCaregivers = asyncHandler(async (req, res) => {
   const { jobId } = req.params;
@@ -351,4 +379,70 @@ export {
   updateJobStatus,
   deleteJobPost,
   getMatchingCaregivers,
+  getJobById,
+  deleteJob,
 };
+
+// Caregiver shift/job history (jobs they've applied to)
+export const getCaregiverHistory = asyncHandler(async (req, res) => {
+  if (req.role !== 'care') {
+    throw new ApiError(403, 'Only caregivers can access shift history');
+  }
+  const { page = 1, limit = 10 } = req.query;
+  const caregiver = req.user;
+
+  // Jobs where caregiver applied
+  const filter = { 'applications.careId': caregiver._id };
+  const jobPosts = await JobPost.find(filter)
+    .populate('familyId', 'name email phoneNo')
+    .limit(limit * 1)
+    .skip((page - 1) * limit)
+    .sort({ date: -1 });
+  const total = await JobPost.countDocuments(filter);
+
+  // Derive shift-like stats
+  let completedCount = 0;
+  let upcomingCount = 0;
+  let totalHours = 0;
+  let totalEarnings = 0;
+  const now = new Date();
+  const shifts = jobPosts.map(j => {
+    const jobDate = new Date(j.date);
+    const isCompleted = jobDate < now || j.status === 'EXPIRE';
+    if (isCompleted) completedCount++; else upcomingCount++;
+    if (isCompleted) {
+      totalHours += j.durationHours || 0;
+      totalEarnings += (j.durationHours || 0) * (j.salary || 0);
+    }
+    return {
+      _id: j._id,
+      elderName: j.elderName,
+      family: j.familyId,
+      date: j.date,
+      startTime: j.startTime,
+      durationHours: j.durationHours,
+      hourlyRate: j.salary,
+      location: j.location,
+      skills: j.skillRequired,
+      rawStatus: j.status,
+      computedStatus: isCompleted ? 'completed' : 'upcoming',
+      createdAt: j.createdAt,
+      updatedAt: j.updatedAt,
+    };
+  });
+  const avgHourly = totalHours > 0 ? +(totalEarnings / totalHours).toFixed(2) : 0;
+
+  return res.status(200).json(new ApiResponse(200, 'Caregiver shift history retrieved', {
+    shifts,
+    stats: {
+      completedCount,
+      upcomingCount,
+      totalHours,
+      totalEarnings,
+      averageHourlyRate: avgHourly,
+    },
+    totalPages: Math.ceil(total / limit),
+    currentPage: page,
+    total,
+  }));
+});
